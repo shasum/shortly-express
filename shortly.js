@@ -3,6 +3,7 @@ var util = require('./lib/utility');
 var partials = require('express-partials');
 var bodyParser = require('body-parser');
 var session = require('express-session');
+var bcrypt = require('bcrypt-nodejs');
 
 var db = require('./app/config');
 var Users = require('./app/collections/users');
@@ -21,7 +22,8 @@ app.use(bodyParser.json());
 // Parse forms (signup/login)
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(express.static(__dirname + '/public'));
-app.use(session({secret: 'hello'}));
+
+app.use(session({secret: 'hello'}));  // More attributes exist for session
 
 var restrict = function(req, res, next) {
   if (req.session.user) {
@@ -35,6 +37,7 @@ var restrict = function(req, res, next) {
 app.get('/', restrict,
 function(req, res) {
   res.render('index');
+  res.end();
 });
 
 
@@ -87,10 +90,34 @@ function(req, res) {
 /************************************************************/
 // Write your authentication routes here
 /************************************************************/
-app.get('/login', function(req, res) {
+app.get('/login', function(req, res) {  // if session exists, redirect to '/''
   res.render('login');
 });
 
+app.post('/login', function(req, res) {
+  var username = req.body.username;
+  var password = req.body.password;
+
+  new User({ 'username': username })
+  .fetch()
+  .then(function(user) {
+    if (user) {
+      bcrypt.compare(password, user.get('password'), function(err, result){
+        if (err) throw err;
+        if (result) {
+          req.session.regenerate(function(){
+            req.session.user = user.get('username');
+            res.redirect('/');
+          });
+        } else {
+          res.redirect('/login');
+        }
+      });
+    } else {
+      res.redirect('/login');
+    }
+  });
+});
 
 /************************************************************/
 // Handle the wildcard route last - if all other routes fail
